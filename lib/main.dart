@@ -1,9 +1,21 @@
 import 'dart:convert';
+import 'package:danyator/widgets/editor/editors/css_editor.dart';
+import 'package:danyator/widgets/editor/editors/html_editor.dart';
+import 'package:danyator/widgets/editor/editors/js_editor.dart';
+import 'package:danyator/widgets/editor/notifiers/code_theme_notifier.dart';
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:provider/provider.dart';
+import 'package:danyator/enums/available_languages.dart';
+import 'package:danyator/widgets/editor/languages_code_content.dart';
 
 void main() {
-  runApp(MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (_) => CodeThemeNotifier(),
+      child: MyApp()
+    )
+  );
 }
 
 class LogEntry {
@@ -37,20 +49,16 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage>
     with SingleTickerProviderStateMixin {
+  late LanguagesCodeContent codeInput;
   late TabController _tabController;
-  late TextEditingController htmlController;
-  late TextEditingController cssController;
-  late TextEditingController jsController;
   final List<LogEntry> logs = [];
   late final WebViewController _webViewController;
 
   @override
   void initState() {
     super.initState();
+    codeInput = LanguagesCodeContent();
     _tabController = TabController(length: 3, vsync: this);
-    htmlController = TextEditingController(text: "<h1>Hello, Flutter!</h1>");
-    cssController = TextEditingController(text: "h1 { color: blue; }");
-    jsController = TextEditingController(text: "console.log('Hello from JS');");
 
     _webViewController = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
@@ -85,16 +93,14 @@ class _MyHomePageState extends State<MyHomePage>
   @override
   void dispose() {
     _tabController.dispose();
-    htmlController.dispose();
-    cssController.dispose();
-    jsController.dispose();
     super.dispose();
   }
 
   void runCode() {
-    String htmlContent = htmlController.text;
-    String cssContent = cssController.text;
-    String jsContent = jsController.text;
+    String htmlContent = codeInput.getLangContent(AvailableLanguages.html);
+
+    String cssContent = codeInput.getLangContent(AvailableLanguages.css);
+    String jsContent = codeInput.getLangContent(AvailableLanguages.js);
 
     // JavaScript to override console functions and send messages back via FlutterChannel
     String overrideConsoleScript = """
@@ -122,10 +128,10 @@ class _MyHomePageState extends State<MyHomePage>
     String fullContent = """
     $htmlContent
     <style>$cssContent</style>
+    $overrideConsoleScript
     <script>
       $jsContent
     </script>
-    $overrideConsoleScript
     """;
 
     _webViewController.loadHtmlString(fullContent);
@@ -159,38 +165,23 @@ class _MyHomePageState extends State<MyHomePage>
                         children: [
                           Padding(
                             padding: const EdgeInsets.all(8.0),
-                            child: TextField(
-                              controller: htmlController,
-                              maxLines: null,
-                              expands: true,
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: "HTML",
-                              ),
+                            child:HTMLEditor(
+                                initialCode: codeInput.getLangContent(AvailableLanguages.html),
+                                onCodeChanged: (String code) => codeInput.setContent(language: AvailableLanguages.html, input: code)
+                            )
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.all(8.0),
+                            child: CSSEditor(
+                              initialCode: codeInput.getLangContent(AvailableLanguages.css),
+                              onCodeChanged: (String code) => codeInput.setContent(language: AvailableLanguages.css, input: code)
                             ),
                           ),
                           Padding(
                             padding: const EdgeInsets.all(8.0),
-                            child: TextField(
-                              controller: cssController,
-                              maxLines: null,
-                              expands: true,
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: "CSS",
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: TextField(
-                              controller: jsController,
-                              maxLines: null,
-                              expands: true,
-                              decoration: InputDecoration(
-                                border: OutlineInputBorder(),
-                                labelText: "JavaScript",
-                              ),
+                            child: JSEditor(
+                                initialCode: codeInput.getLangContent(AvailableLanguages.js),
+                                onCodeChanged: (String code) => codeInput.setContent(language: AvailableLanguages.js, input: code)
                             ),
                           ),
                         ],
@@ -216,12 +207,17 @@ class _MyHomePageState extends State<MyHomePage>
                 Expanded(
                   flex: 2,
                   child: Container(
-                    margin: const EdgeInsets.all(0.0),
+                    margin: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.black),
-                      borderRadius: BorderRadius.circular(10),
+                      borderRadius: BorderRadius.circular(15.0)
                     ),
-                    child: WebViewWidget(controller: _webViewController),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.all(
+                        const Radius.circular(15.0)
+                      ),
+                      child: WebViewWidget(controller: _webViewController),
+                    )
                   ),
                 ),
                 // Logs Console
@@ -232,6 +228,7 @@ class _MyHomePageState extends State<MyHomePage>
                     padding: const EdgeInsets.all(8.0),
                     decoration: BoxDecoration(
                       border: Border.all(color: Colors.grey),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: ListView.separated(
                       itemCount: logs.length,
